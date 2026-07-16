@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIREWATCH IoT — Command Center</title>
+<style>
+  :root{
+    --background: #07080f;
+    --foreground: #e8eaf0;
+    --card: #0d0f1a;
+    --card-foreground: #e8eaf0;
+    --primary: #ff4b1f;
+    --primary-foreground: #ffffff;
+    --secondary: #131525;
+    --secondary-foreground: #a0a8c0;
+    --muted: #131525;
+    --muted-foreground: #5a6180;
+    --accent: #ff8c00;
+    --destructive: #ff2424;
+    --border: rgba(255,255,255,0.07);
+    --radius: 6px;
+    --safe: #22c55e;
+    --warn: #f59e0b;
+    --danger: #ff2424;
+    --mono: "JetBrains Mono","SF Mono",Consolas,monospace;
+    --sans: "Inter",system-ui,sans-serif;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{
+    background:var(--background); color:var(--foreground);
+    font-family:var(--sans); height:100%; overflow:hidden;
+    font-size:15px;
+  }
+  ::selection{ background:rgba(255,75,31,0.25); }
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 24px; border-bottom:1px solid var(--border);
+    background:var(--background); flex-shrink:0;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:32px;height:32px;border-radius:var(--radius);
+    background:linear-gradient(135deg,var(--primary),#cc3a15);
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;flex-shrink:0;
+  }
+  .brand-text .title{
+    font-weight:700;font-size:15px;letter-spacing:1px;
+    font-family:var(--mono);
+  }
+  .brand-text .subtitle{
+    font-family:var(--mono);font-size:10px;
+    color:var(--muted-foreground);letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  .topbar-right{ display:flex;align-items:center;gap:16px; }
+  .status-indicators{ display:flex;align-items:center;gap:6px; }
+  .status-dot{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--mono);font-size:10px;
+  }
+  .status-dot .dot{ width:7px;height:7px;border-radius:50%; }
+  .dot-green{ background:var(--safe); }
+  .dot-amber{ background:var(--warn); }
+  .dot-red{ background:var(--danger); }
+  .clock{
+    font-family:var(--mono);font-size:12px;
+    color:var(--muted-foreground);letter-spacing:0.5px;
+  }
+  .sys-indicator{
+    display:flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:10px;
+    color:var(--safe);
+  }
+  .sys-indicator .ping{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--safe);animation:pulse 2s infinite;
+  }
+  .vdiv{ width:1px;height:16px;background:var(--border); }
+  .fire-banner{
+    display:none;align-items:center;gap:12px;
+    padding:10px 24px; flex-shrink:0;
+    background:rgba(69,10,10,0.6);
+    border-bottom:1px solid rgba(239,68,68,0.4);
+  }
+  .fire-banner.show{ display:flex; }
+  .fire-banner .icon{ color:var(--danger);animation:pulse 1s infinite;font-size:18px; }
+  .fire-banner .msg{ color:#fca5a5;font-size:13px;font-weight:500; }
+  .fire-banner .dispatch{
+    margin-left:auto;display:flex;align-items:center;gap:8px;
+    font-family:var(--mono);font-size:11px;color:#f87171;
+  }
+  .layout{
+    display:flex; flex:1; overflow:hidden;
+  }
+  .sidebar-left{
+    width:288px; flex-shrink:0;
+    border-right:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .sidebar-left .head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid var(--border);
+    font-family:var(--mono);font-size:10px;
+    letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--muted-foreground);
+  }
+  .sensor-list{ flex:1; overflow-y:auto; }
+  .sensor-item{
+    display:flex; align-items:center; gap:10px;
+    padding:12px 16px; border-bottom:1px solid var(--border);
+    cursor:pointer; transition:background 0.15s;
+  }
+  .sensor-item:hover{ background:var(--secondary); }
+  .sensor-item .sid{
+    font-family:var(--mono);font-size:11px;font-weight:600;
+    color:var(--safe);min-width:40px;
+  }
+  .sensor-item.warn .sid{ color:var(--warn); }
+  .sensor-item.danger .sid{ color:var(--danger); }
+  .sensor-item.offline .sid{ color:var(--muted-foreground); }
+  .sensor-item .sinfo{ flex:1; min-width:0; }
+  .sensor-item .sname{ font-size:12px;font-weight:500;color:var(--foreground); }
+  .sensor-item .sloc{ font-size:11px;color:var(--muted-foreground);font-family:var(--mono); }
+  .sensor-item .stemp{
+    font-family:var(--mono);font-size:14px;font-weight:700;
+    color:var(--safe);tabular-nums;
+  }
+  .sensor-item.warn .stemp{ color:var(--warn); }
+  .sensor-item.danger .stemp{ color:var(--danger); }
+  .sensor-item.offline .stemp{ color:var(--muted-foreground); }
+  .sensor-item .sbadge{
+    font-family:var(--mono);font-size:9px;font-weight:700;
+    padding:2px 6px;border-radius:var(--radius);
+    background:rgba(34,197,94,0.15);color:var(--safe);
+    letter-spacing:1px;
+  }
+  .sensor-item.warn .sbadge{ background:rgba(245,158,11,0.15);color:var(--warn); }
+  .sensor-item.danger .sbadge{ background:rgba(255,36,36,0.15);color:var(--danger); }
+  .sensor-item.offline .sbadge{ background:rgba(90,97,128,0.15);color:var(--muted-foreground); }
+  .map-area{ flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .map-head{
+    display:flex;align-items:center;gap:8px;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+    font-family:var(--mono);font-size:10px;
+    letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--muted-foreground);
+  }
+  .map-head .legend{ margin-left:auto;display:flex;gap:12px;font-size:10px;color:var(--muted-foreground); }
+  .map-head .legend .ldot{ width:7px;height:7px;border-radius:50%;display:inline-block; }
+  .map-body{
+    flex:1; display:flex; align-items:center; justify-content:center;
+    padding:20px; position:relative; overflow:hidden;
+  }
+  .map-svg-wrap{
+    position:relative; border-radius:var(--radius);
+    overflow:hidden; max-width:600px; width:100%;
+    border:1px solid var(--border);
+  }
+  .map-svg{ width:100%; display:block; background:#0a0c16; }
+  .map-grid-line{ stroke:rgba(255,255,255,0.03); stroke-width:1; }
+  .map-road{ fill:rgba(255,255,255,0.04); }
+  .map-road-text{ fill:rgba(255,255,255,0.15);font-size:9px;font-family:var(--mono); }
+  .map-building{
+    fill:rgba(30,35,60,0.9);stroke:rgba(255,255,255,0.12);
+    stroke-width:1.5;rx:4;
+  }
+  .map-blabel{
+    fill:rgba(255,255,255,0.5);font-size:11px;
+    font-weight:600;text-anchor:middle;
+  }
+  .map-room{
+    fill:rgba(255,255,255,0.04);stroke:rgba(255,255,255,0.07);
+    stroke-width:1;rx:2;
+  }
+  .map-rlabel{
+    fill:rgba(255,255,255,0.2);font-size:8px;
+    font-family:var(--mono);text-anchor:middle;
+  }
+  .sensor-node{ cursor:pointer; }
+  .sensor-node .base{
+    fill:var(--secondary);stroke:var(--safe);
+    stroke-width:1.6;transition:stroke 0.3s;
+  }
+  .sensor-node.warn .base{ stroke:var(--warn); }
+  .sensor-node.danger .base{ stroke:var(--danger);fill:rgba(255,36,36,0.12); }
+  .sensor-node.offline .base{ stroke:var(--muted-foreground);opacity:0.3; }
+  .sensor-node .ring{ fill:none;stroke:var(--safe);stroke-width:1;opacity:0.5; }
+  .sensor-node.danger .ring{ stroke:var(--danger);animation:ringPulse 1.4s ease-out infinite; }
+  .sensor-node.warn .ring{ stroke:var(--warn); }
+  @keyframes ringPulse{
+    0%{ r:13; opacity:0.7; stroke-width:2; }
+    100%{ r:30; opacity:0; stroke-width:0.5; }
+  }
+  .snode-id{
+    font-family:var(--mono);font-size:8px;font-weight:700;
+    fill:var(--safe);text-anchor:middle;pointer-events:none;
+  }
+  .sensor-node.warn .snode-id{ fill:var(--warn); }
+  .sensor-node.danger .snode-id{ fill:var(--danger); }
+  .sensor-node .slabel-bg{ fill:rgba(7,8,15,0.85);pointer-events:none; }
+  .sensor-detail{
+    position:absolute;bottom:12px;left:12px;
+    background:#0d0f1a;border:1px solid var(--border);
+    border-radius:var(--radius);padding:14px;min-width:200px;
+    display:none;
+  }
+  .sensor-detail.show{ display:block; }
+  .sensor-detail .dtitle{ font-weight:700;font-size:13px; }
+  .sensor-detail .dloc{ font-family:var(--mono);font-size:10px;color:var(--muted-foreground); }
+  .sensor-detail .dgrid{ display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px; }
+  .sensor-detail .dcell{
+    background:rgba(255,255,255,0.03);border-radius:var(--radius);padding:8px;
+  }
+  .sensor-detail .dlabel{ font-family:var(--mono);font-size:9px;color:var(--muted-foreground); }
+  .sensor-detail .dval{
+    font-family:var(--mono);font-size:16px;font-weight:700;tabular-nums;
+  }
+  .panel-right{
+    width:320px; flex-shrink:0;
+    border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .panel-tabs{
+    display:flex; border-bottom:1px solid var(--border);
+  }
+  .panel-tab{
+    flex:1; padding:12px 0; text-align:center;
+    font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--muted-foreground);cursor:pointer;
+    border-bottom:2px solid transparent;transition:all 0.15s;
+  }
+  .panel-tab.active{ color:var(--foreground);border-bottom-color:var(--primary); }
+  .panel-tab:hover{ color:var(--foreground); }
+  .panel-content{ flex:1;overflow:hidden;position:relative; }
+  .panel-page{
+    position:absolute;inset:0;overflow-y:auto;
+    display:none; padding:0;
+  }
+  .panel-page.active{ display:block; }
+  .alert-item{
+    display:flex;gap:10px;padding:12px 16px;
+    border-bottom:1px solid var(--border);
+  }
+  .alert-item .icon{
+    width:28px;height:28px;border-radius:var(--radius);flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,36,36,0.15);font-size:13px;
+  }
+  .alert-item.info .icon{ background:rgba(245,158,11,0.15); }
+  .alert-item .body{ flex:1;min-width:0; }
+  .alert-item .line1{ font-size:12px;font-weight:600; }
+  .alert-item .line2{ font-size:11px;color:var(--muted-foreground);margin-top:2px; }
+  .alert-item .atime{ font-family:var(--mono);font-size:10px;color:var(--muted-foreground);margin-top:4px; }
+  .alert-empty{
+    padding:40px 16px;text-align:center;
+    color:var(--muted-foreground);font-size:12px;
+    font-family:var(--mono);
+  }
+  .log-item{
+    padding:10px 16px;font-family:var(--mono);font-size:11px;
+    border-bottom:1px solid var(--border);
+    display:flex;gap:8px;
+  }
+  .log-item .ltime{ color:var(--muted-foreground);flex-shrink:0; }
+  .log-item .lmsg{ color:var(--foreground); }
+  .log-item.warn .lmsg{ color:var(--warn); }
+  .log-item.danger .lmsg{ color:var(--danger); }
+  .statusbar{
+    display:flex;align-items:center;gap:24px;
+    padding:8px 24px; border-top:1px solid var(--border);
+    font-family:var(--mono);font-size:10px;
+    color:var(--muted-foreground);flex-shrink:0;
+  }
+  .statusbar .sright{ margin-left:auto;display:flex;align-items:center;gap:6px; }
+  .statusbar .spulse{
+    width:6px;height:6px;border-radius:50%;
+    background:var(--safe);animation:pulse 2s infinite;
+  }
+  .statusbar .spulse.off{ background:var(--muted-foreground);animation:none; }
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.65);
+    display:none;align-items:center;justify-content:center;
+    z-index:100;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:var(--radius);padding:24px;width:340px;max-width:90vw;
+  }
+  .modal-box h3{ font-size:16px;font-weight:600;margin-bottom:4px; }
+  .modal-box .desc{
+    font-size:11px;color:var(--muted-foreground);
+    margin-bottom:16px;font-family:var(--mono);
+  }
+  .modal-box label{ font-size:12px;color:var(--secondary-foreground);display:block;margin-bottom:4px; }
+  .modal-box input{
+    width:100%;padding:10px 12px;border-radius:var(--radius);
+    background:var(--secondary);border:1px solid var(--border);
+    color:var(--foreground);font-family:var(--mono);font-size:14px;
+    outline:none;margin-bottom:12px;
+  }
+  .modal-box input:focus{ border-color:var(--primary); }
+  .modal-box .btn-row{ display:flex;gap:10px; }
+  .modal-box .btn{
+    flex:1;padding:10px;border-radius:var(--radius);
+    border:1px solid var(--border);background:var(--secondary);
+    color:var(--secondary-foreground);font-size:12px;font-weight:600;
+    cursor:pointer;text-align:center;transition:all 0.15s;
+  }
+  .modal-box .btn:hover{ border-color:var(--muted-foreground);color:var(--foreground); }
+  .modal-box .btn.primary{ background:rgba(255,75,31,0.15);border-color:rgba(255,75,31,0.3);color:var(--primary); }
+  .modal-box .btn.primary:hover{ background:rgba(255,75,31,0.25); }
+  @keyframes pulse{
+    0%,100%{ opacity:1; }
+    50%{ opacity:0.5; }
+  }
+  ::-webkit-scrollbar{ width:5px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,0.1);border-radius:3px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">🔥</div>
+    <div class="brand-text">
+      <div class="title">FIREWATCH IoT</div>
+      <div class="subtitle">Physical &amp; Cyber Security — ESP32</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-indicators">
+      <span class="status-dot"><span class="dot dot-green"></span><span id="countNormal">0</span></span>
+      <span class="status-dot"><span class="dot dot-amber"></span><span id="countWarn">0</span></span>
+      <span class="status-dot"><span class="dot dot-red"></span><span id="countDanger">0</span></span>
+    </div>
+    <div class="vdiv"></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <div class="vdiv"></div>
+    <div class="sys-indicator" id="sysIndicator">
+      <span class="ping"></span>
+      <span id="sysText">SISTEM AKTIF</span>
+    </div>
+  </div>
+</div>
+<div class="fire-banner" id="fireBanner">
+  <span class="icon">🔥</span>
+  <span class="msg" id="fireMsg">Kebakaran terdeteksi!</span>
+  <span class="dispatch">📞 &nbsp;Pemadam dihubungi</span>
+</div>
+<div class="layout">
+  <aside class="sidebar-left">
+    <div class="head">Sensor <span id="sensorTotal">(0)</span></div>
+    <div class="sensor-list" id="sensorList"></div>
+  </aside>
+  <main class="map-area">
+    <div class="map-head">
+      <span>📍 Peta Lokasi</span>
+      <div class="legend">
+        <span><span class="ldot" style="background:var(--safe)"></span> Normal</span>
+        <span><span class="ldot" style="background:var(--warn)"></span> Peringatan</span>
+        <span><span class="ldot" style="background:var(--danger)"></span> Kebakaran</span>
+      </div>
+    </div>
+    <div class="map-body">
+      <div class="map-svg-wrap">
+        <svg class="map-svg" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <pattern id="mgrid" width="30" height="30" patternUnits="userSpaceOnUse">
+              <path d="M 30 0 L 0 0 0 30" fill="none" class="map-grid-line"/>
+            </pattern>
+            <radialGradient id="fireGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff2424" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="#ff2424" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <rect width="600" height="400" fill="url(#mgrid)"/>
+          <rect x="0" y="240" width="600" height="18" class="map-road"/>
+          <rect x="240" y="0" width="18" height="400" class="map-road"/>
+          <text x="120" y="253" class="map-road-text" text-anchor="middle">Jl. Kampus Barat</text>
+          <text x="420" y="253" class="map-road-text" text-anchor="middle">Jl. Kampus Timur</text>
+          <rect x="80" y="80" width="140" height="140" class="map-building" rx="4"/>
+          <text x="150" y="102" class="map-blabel">GEDUNG A</text>
+          <rect x="90" y="108" width="55" height="40" class="map-room"/>
+          <rect x="155" y="108" width="55" height="40" class="map-room"/>
+          <rect x="90" y="155" width="55" height="40" class="map-room"/>
+          <rect x="155" y="155" width="55" height="40" class="map-room"/>
+          <text x="150" y="213" class="map-rlabel">Lt. 1 — Lt. 2</text>
+          <rect x="270" y="80" width="140" height="140" class="map-building" rx="4"/>
+          <text x="340" y="102" class="map-blabel">GEDUNG B</text>
+          <rect x="280" y="108" width="55" height="40" class="map-room"/>
+          <rect x="345" y="108" width="55" height="40" class="map-room"/>
+          <rect x="280" y="155" width="55" height="40" class="map-room"/>
+          <rect x="345" y="155" width="55" height="40" class="map-room"/>
+          <text x="340" y="213" class="map-rlabel">Lt. 1 — Lt. 2</text>
+          <rect x="430" y="100" width="80" height="60" class="map-building" rx="4"/>
+          <text x="470" y="128" class="map-blabel" font-size="9">SERVER</text>
+          <text x="470" y="143" class="map-blabel" font-size="9">ROOM</text>
+          <rect x="100" y="265" width="160" height="100" class="map-building" rx="4"/>
+          <text x="180" y="320" class="map-blabel">AULA UTAMA</text>
+          <rect x="30" y="275" width="60" height="70" class="map-building" rx="4"/>
+          <text x="60" y="315" class="map-blabel" font-size="8">GUDANG</text>
+          <rect x="310" y="265" width="140" height="100" class="map-building" rx="4"/>
+          <text x="380" y="320" class="map-blabel">PERPUSTAKAAN</text>
+          <ellipse cx="500" cy="330" rx="50" ry="35" fill="rgba(34,197,94,0.05)" stroke="rgba(34,197,94,0.1)" stroke-width="1"/>
+          <text x="500" y="334" fill="rgba(34,197,94,0.3)" font-size="8" text-anchor="middle">Taman</text>
+          <g id="fireGlows"></g>
+          <g id="sensorLayer"></g>
+        </svg>
+        <div class="sensor-detail" id="sensorDetail">
+          <div class="dtitle" id="dName"></div>
+          <div class="dloc" id="dLoc"></div>
+          <div class="dgrid">
+            <div class="dcell"><div class="dlabel">SUHU</div><div class="dval" id="dTemp">--°C</div></div>
+            <div class="dcell"><div class="dlabel">KELEMBABAN</div><div class="dval" id="dHumi">--%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <aside class="panel-right">
+    <div class="panel-tabs">
+      <div class="panel-tab active" onclick="switchTab(0)">Notifikasi</div>
+      <div class="panel-tab" onclick="switchTab(1)">Log Sistem</div>
+    </div>
+    <div class="panel-content">
+      <div class="panel-page active" id="pageAlerts"><div class="alert-empty">Menunggu data dari ESP32...</div></div>
+      <div class="panel-page" id="pageLogs"><div class="alert-empty">Belum ada log sistem.</div></div>
+    </div>
+  </aside>
+</div>
+<div class="statusbar">
+  <span>⏱ Update 2s</span>
+  <span>📡 HTTP</span>
+  <span>🛡️ v2.0</span>
+  <div class="sright">
+    <span class="spulse" id="statusPulse"></span>
+    <span id="statusConn">ESP32 TERHUBUNG</span>
+    <span style="margin-left:12px;">
+      <button style="padding:4px 10px;font-size:10px;background:var(--secondary);border:1px solid var(--border);border-radius:var(--radius);color:var(--secondary-foreground);cursor:pointer;font-family:var(--mono);" onclick="openConfig()">Atur Posisi</button>
+    </span>
+  </div>
+</div>
+<div class="modal-overlay" id="configModal">
+  <div class="modal-box">
+    <h3>Atur Posisi ESP32</h3>
+    <div class="desc">Koordinat dalam viewBox 0–600 × 0–400</div>
+    <label>Posisi X</label>
+    <input type="number" id="posX" min="0" max="600">
+    <label>Posisi Y</label>
+    <input type="number" id="posY" min="0" max="400">
+    <div class="btn-row">
+      <button class="btn" onclick="closeConfig()">Batal</button>
+      <button class="btn primary" onclick="saveConfig()">Simpan</button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const sensorLayer=document.getElementById('sensorLayer');
+  const sensorList=document.getElementById('sensorList');
+  const sensorDetail=document.getElementById('sensorDetail');
+  const dName=document.getElementById('dName'),dLoc=document.getElementById('dLoc');
+  const dTemp=document.getElementById('dTemp'),dHumi=document.getElementById('dHumi');
+  const clockEl=document.getElementById('clock');
+  const fireGlows=document.getElementById('fireGlows');
+  const pageAlerts=document.getElementById('pageAlerts');
+  const pageLogs=document.getElementById('pageLogs');
+  const countNormal=document.getElementById('countNormal');
+  const countWarn=document.getElementById('countWarn');
+  const countDanger=document.getElementById('countDanger');
+  const sensorTotal=document.getElementById('sensorTotal');
+  const sysText=document.getElementById('sysText');
+  const statusConn=document.getElementById('statusConn');
+  const statusPulse=document.getElementById('statusPulse');
+  const fireBanner=document.getElementById('fireBanner');
+  const fireMsg=document.getElementById('fireMsg');
+  const dummyPos=[
+    {id:'S-001',name:'Gedung A — Lt. 1',loc:'Ruang Kelas 101',x:155,y:175},
+    {id:'S-002',name:'Gedung A — Lt. 2',loc:'Laboratorium Komputer',x:155,y:115},
+    {id:'S-003',name:'Gedung B — Lt. 1',loc:'Dapur & Kantin',x:310,y:175},
+    {id:'S-004',name:'Gedung B — Lt. 2',loc:'Ruang Administrasi',x:310,y:115},
+    {id:'S-005',name:'Aula Utama',loc:'Aula Serba Guna',x:230,y:290},
+    {id:'S-006',name:'Perpustakaan',loc:'Ruang Baca Utama',x:385,y:275},
+    {id:'S-007',name:'Gudang',loc:'Gudang Penyimpanan',x:80,y:305},
+    {id:'S-008',name:'Server Room',loc:'Pusat Data & IT',x:440,y:155},
+  ];
+  let espOnline=false,lastOnline=0,prevBahaya=false,feedItems=false;
+  let logEntries=[];
+  let espData={temp:0,humidity:0,gas:0,bahaya:false,x:310,y:175};
+  function statusClass(t,g,off){
+    if(off) return 'offline';
+    if(t>=80||g>=2000) return 'danger';
+    if(t>=50||g>=1200) return 'warn';
+    return 'normal';
+  }
+  function statusLabel(s){ return s==='danger'?'KEBAKARAN':s==='warn'?'PERINGATAN':s==='offline'?'OFFLINE':'NORMAL'; }
+  function tempColor(t){ return t>=80?'#ff2424':t>=50?'#f59e0b':'#22c55e'; }
+  function pushLog(type,msg){
+    const now=new Date().toLocaleTimeString('id-ID',{hour12:false});
+    logEntries.unshift({time:now,msg,type});
+    let h='';
+    logEntries.slice(0,50).forEach(e=>{ h+='<div class="log-item '+(e.type||'')+'"><span class="ltime">'+e.time+'</span><span class="lmsg">'+e.msg+'</span></div>'; });
+    pageLogs.innerHTML=h;
+  }
+  function pushAlert(type,line1,line2){
+    if(!feedItems){ pageAlerts.innerHTML=''; feedItems=true; }
+    const icons={danger:'🔥',info:'⚠️',online:'🟢',offline:'⚫'};
+    const now=new Date().toLocaleTimeString('id-ID',{hour12:false});
+    const d=document.createElement('div');
+    d.className='alert-item'+(type==='info'?' info':'');
+    d.innerHTML='<div class="icon">'+(icons[type]||'ℹ️')+'</div><div class="body"><div class="line1">'+line1+'</div><div class="line2">'+line2+'</div><div class="atime">'+now+'</div></div>';
+    pageAlerts.prepend(d);
+    pushLog(type==='danger'?'danger':type==='info'?'warn':'',line1);
+  }
+  function renderAll(){
+    const sensors=[];
+    if(espOnline){
+      sensors.push({
+        id:'S-ESP',name:'ESP32 (DHT22+MQ-2)',loc:'Gedung B Lt.1',
+        x:espData.x,y:espData.y,temp:espData.temp,humidity:espData.humidity,gas:espData.gas,
+        status:statusClass(espData.temp,espData.gas,false)
+      });
+    }
+    dummyPos.forEach(p=>{
+      const t=espOnline?Math.max(20,espData.temp+(Math.random()*4-2)):0;
+      const g=espOnline?Math.max(0,espData.gas+Math.floor(Math.random()*200-100)):0;
+      sensors.push({...p,temp:parseFloat(t.toFixed(1)),humidity:espOnline?espData.humidity:0,gas:g,status:espOnline?statusClass(t,g,false):'offline'});
+    });
+    let nc=0,wc=0,dc=0;
+    sensors.forEach(s=>{ if(s.status==='normal')nc++; else if(s.status==='warn')wc++; else if(s.status==='danger')dc++; });
+    countNormal.textContent=nc; countWarn.textContent=wc; countDanger.textContent=dc;
+    sensorTotal.textContent='('+sensors.length+')';
+    let fg='',mh='';
+    sensors.forEach(s=>{
+      const cls=s.status;
+      if(cls==='danger') fg+='<ellipse cx="'+s.x+'" cy="'+s.y+'" rx="40" ry="40" fill="url(#fireGlow)"/>';
+      const isFire=cls==='danger',isWarn=cls==='warn';
+      mh+='<g class="sensor-node '+cls+'" onclick="selectSensor(\''+s.id+'\')">';
+      if(isFire||isWarn){
+        const d=isFire?'1s':'2s';
+        mh+='<circle class="ring" cx="'+s.x+'" cy="'+s.y+'" r="13"><animate attributeName="r" values="13;28" dur="'+d+'" repeatCount="indefinite"/><animate attributeName="opacity" values="0.4;0" dur="'+d+'" repeatCount="indefinite"/></circle>';
+        mh+='<circle class="ring" cx="'+s.x+'" cy="'+s.y+'" r="13"><animate attributeName="r" values="13;34" dur="'+d+'" begin="0.5s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.3;0" dur="'+d+'" begin="0.5s" repeatCount="indefinite"/></circle>';
+      }
+      mh+='<circle class="base" cx="'+s.x+'" cy="'+s.y+'" r="8"/>';
+      mh+='<circle cx="'+s.x+'" cy="'+s.y+'" r="4" fill="'+(cls==='offline'?'var(--muted-foreground)':isFire?'var(--danger)':isWarn?'var(--warn)':'var(--safe)')+'"/>';
+      mh+='<rect class="slabel-bg" x="'+(s.x+10)+'" y="'+(s.y-9)+'" width="36" height="13" rx="3"/>';
+      mh+='<text class="snode-id" x="'+(s.x+28)+'" y="'+(s.y+1)+'" dominant-baseline="middle">'+s.id+'</text>';
+      mh+='</g>';
+    });
+    fireGlows.innerHTML=fg;
+    sensorLayer.innerHTML=mh;
+    let lh='';
+    sensors.forEach(s=>{
+      const cls=s.status;
+      lh+='<div class="sensor-item '+(cls==='normal'?'':cls)+'" onclick="selectSensor(\''+s.id+'\')">';
+      lh+='<span class="sid">'+s.id+'</span>';
+      lh+='<div class="sinfo"><div class="sname">'+s.name+'</div><div class="sloc">'+s.loc+'</div></div>';
+      if(cls!=='offline') lh+='<div class="stemp" style="color:'+tempColor(s.temp)+'">'+s.temp.toFixed(1)+'°</div>';
+      else lh+='<div class="stemp" style="color:var(--muted-foreground)">OFF</div>';
+      lh+='<span class="sbadge">'+statusLabel(cls)+'</span></div>';
+    });
+    sensorList.innerHTML=lh;
+    const hasFire=espOnline&&espData.bahaya;
+    fireBanner.classList.toggle('show',hasFire);
+    if(hasFire&&!prevBahaya){ fireMsg.textContent='Kebakaran terdeteksi! Suhu '+espData.temp.toFixed(1)+'°C, Gas: '+espData.gas; }
+    if(hasFire&&!prevBahaya){ pushAlert('danger','Kebakaran terdeteksi!','Sensor ESP32: Suhu '+espData.temp.toFixed(1)+'°C, Gas: '+espData.gas); pushLog('danger','🔥 KEBAKARAN — Suhu '+espData.temp.toFixed(1)+'°C, Gas: '+espData.gas); }
+    prevBahaya=hasFire;
+    if(!espOnline){ sysText.textContent='OFFLINE'; statusConn.textContent='ESP32 TIDAK TERHUBUNG'; statusPulse.classList.add('off'); }
+    else { sysText.textContent=hasFire?'KEBAKARAN!':espData.temp>=50?'WASPADA':'SISTEM AKTIF'; statusConn.textContent=hasFire?'⚠️ BAHAYA':'ESP32 TERHUBUNG'; statusPulse.classList.remove('off'); }
+  }
+  window.selectSensor=function(id){
+    if(selectedSensorId===id){ sensorDetail.classList.remove('show'); selectedSensorId=null; return; }
+    selectedSensorId=id;
+    if(id==='S-ESP'&&espOnline){ dName.textContent='ESP32 (DHT22+MQ-2)'; dLoc.textContent='Gedung B Lt.1'; dTemp.textContent=espData.temp.toFixed(1)+'°C'; dTemp.style.color=tempColor(espData.temp); dHumi.textContent=espData.humidity+'%'; }
+    else {
+      const d=dummyPos.find(p=>p.id===id);
+      if(d){ dName.textContent=d.name; dLoc.textContent=d.loc; const t=espOnline?Math.max(20,espData.temp+(Math.random()*4-2)):0; dTemp.textContent=t.toFixed(1)+'°C'; dTemp.style.color=tempColor(t); dHumi.textContent=(espOnline?espData.humidity:0)+'%'; }
+    }
+    sensorDetail.classList.add('show');
+  };
+  let selectedSensorId=null;
+  window.switchTab=function(n){
+    document.querySelectorAll('.panel-tab').forEach((e,i)=>{ e.classList.toggle('active',i===n); });
+    document.querySelectorAll('.panel-page').forEach((e,i)=>{ e.classList.toggle('active',i===n); });
+  };
+  async function fetchData(){
+    try{ const r=await fetch('/api/sensors'); const d=await r.json(); espData=d; espOnline=true; lastOnline=Date.now(); }
+    catch(e){ if(!lastOnline||Date.now()-lastOnline>5000) espOnline=false; }
+    renderAll();
+  }
+  window.openConfig=async function(){
+    const modal=document.getElementById('configModal');
+    try{ const r=await fetch('/api/config'); const c=await r.json(); document.getElementById('posX').value=c.x; document.getElementById('posY').value=c.y; }
+    catch(e){ document.getElementById('posX').value=espData.x; document.getElementById('posY').value=espData.y; }
+    modal.classList.add('show');
+  };
+  window.closeConfig=function(){ document.getElementById('configModal').classList.remove('show'); };
+  window.saveConfig=async function(){
+    const x=parseInt(document.getElementById('posX').value);
+    const y=parseInt(document.getElementById('posY').value);
+    if(isNaN(x)||isNaN(y)||x<0||x>600||y<0||y>400){ alert('Koordinat tidak valid (0-600 x 0-400).'); return; }
+    try{ const r=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x,y})}); if(r.ok){ espData.x=x; espData.y=y; closeConfig(); renderAll(); } }
+    catch(e){ alert('Gagal menyimpan.'); }
+  };
+  function tick(){ clockEl.textContent=new Date().toLocaleTimeString('id-ID',{hour12:false}); }
+  setInterval(tick,1000); tick();
+  fetchData(); setInterval(fetchData,2000);
+  pushLog('','🚀 Sistem FireWatch IoT dimulai');
+  pushLog('','📡 Menunggu data dari ESP32...');
+})();
+</script>
+</body>
+</html>
